@@ -11,8 +11,9 @@ import Login from './components/Login';
 import Dashboard from './components/Dashboard';
 import SmartCalendarTool from './components/SmartCalendarTool';
 import ParametricTemplateTool from './components/ParametricTemplateTool';
+import UserProfile from './components/UserProfile';
 
-export type Page = 'home' | 'login' | 'dashboard' | 'calendars' | 'templates' | 'library';
+export type Page = 'home' | 'login' | 'dashboard' | 'calendars' | 'templates' | 'library' | 'profile';
 
 const App: React.FC = () => {
   const [page, setPage] = useState<Page>('home');
@@ -21,7 +22,7 @@ const App: React.FC = () => {
 
   const navigateTo = (targetPage: Page) => {
     // If trying to access private pages without auth, redirect to login
-    if (['dashboard', 'calendars', 'templates', 'library'].includes(targetPage) && !isAuthenticated) {
+    if (['dashboard', 'calendars', 'templates', 'library', 'profile'].includes(targetPage) && !isAuthenticated) {
       setPage('login');
     } else {
       setPage(targetPage);
@@ -86,6 +87,14 @@ const App: React.FC = () => {
           return (
             <div className="pt-24 pb-12 min-h-screen bg-surface">
               <TemplateGallery showPersonal={true} />
+            </div>
+          );
+        case 'profile':
+          return (
+            <div className="pt-24 pb-12 min-h-screen bg-surface">
+              <div className="container mx-auto px-6">
+                <UserProfile userEmail={userEmail || ''} onLogout={handleLogout} onBack={() => navigateTo('dashboard')} />
+              </div>
             </div>
           );
         case 'dashboard':

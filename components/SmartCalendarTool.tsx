@@ -7,11 +7,21 @@ interface SmartCalendarToolProps {
 }
 
 interface CalendarEvent {
+  id: string; // Added ID for drag-and-drop tracking
   date: string;
   title: string;
   description: string;
   type: string;
-  assignedTo?: string; // Name of the team member
+  assignedTo?: string;
+  status: 'todo' | 'in-progress' | 'done'; // Added status for Kanban
+}
+
+interface GeneratedAsset {
+    id: string;
+    name: string;
+    type: string;
+    size: string;
+    status: 'Ready';
 }
 
 interface TeamMember {
@@ -38,12 +48,34 @@ const MOCK_PROJECTS: ExistingProject[] = [
     { id: 3, title: 'EcoStyle Launch', status: 'Completed', dateRange: 'Aug 15 - Sep 30', progress: 100, members: ['AL', 'MS', 'JD'] },
 ];
 
+const MOCK_PROJECT_EVENTS: Record<number, CalendarEvent[]> = {
+    1: [
+        { id: '101', date: '2023-10-01', title: 'Kickoff Meeting', description: 'Define scope and goals', type: 'Meeting', assignedTo: 'Jane Doe', status: 'done' },
+        { id: '102', date: '2023-10-05', title: 'Logo Concepts', description: 'Initial sketches and vectors', type: 'Design', assignedTo: 'Alex Lee', status: 'done' },
+        { id: '103', date: '2023-10-15', title: 'Brand Guidelines', description: 'Drafting the PDF guide', type: 'Documentation', assignedTo: 'Jane Doe', status: 'in-progress' },
+        { id: '104', date: '2023-10-25', title: 'Website Mockups', description: 'Homepage and About page', type: 'Design', assignedTo: 'Alex Lee', status: 'in-progress' },
+        { id: '105', date: '2023-11-01', title: 'Client Review', description: 'Feedback session', type: 'Meeting', assignedTo: 'Jane Doe', status: 'todo' },
+        { id: '106', date: '2023-11-10', title: 'Social Assets', description: 'Templates for Instagram', type: 'Design', assignedTo: 'Alex Lee', status: 'todo' },
+    ],
+    2: [
+        { id: '201', date: '2024-01-01', title: 'Content Strategy', description: 'Plan posts for January', type: 'Strategy', assignedTo: 'Jane Doe', status: 'todo' },
+        { id: '202', date: '2024-01-05', title: 'Asset Creation', description: 'Create visuals', type: 'Design', assignedTo: 'Jane Doe', status: 'todo' },
+    ],
+    3: [
+        { id: '301', date: '2023-08-15', title: 'Research', description: 'Market analysis', type: 'Research', assignedTo: 'Alex Lee', status: 'done' },
+        { id: '302', date: '2023-09-01', title: 'Design Phase', description: 'Core assets', type: 'Design', assignedTo: 'Mike Smith', status: 'done' },
+        { id: '303', date: '2023-09-30', title: 'Launch', description: 'Go live', type: 'Launch', assignedTo: 'Jane Doe', status: 'done' },
+    ]
+};
+
 const AVATAR_COLORS = ['bg-red-500', 'bg-green-500', 'bg-blue-500', 'bg-yellow-500', 'bg-purple-500', 'bg-pink-500'];
 
 const SmartCalendarTool: React.FC<SmartCalendarToolProps> = ({ onBack }) => {
-  // --- View State (List vs Wizard) ---
-  const [view, setView] = useState<'list' | 'wizard'>('list');
-  const [visualizationMode, setVisualizationMode] = useState<'timeline' | 'kanban' | 'calendar'>('timeline');
+  // --- View State (List vs Wizard vs Detail) ---
+  const [view, setView] = useState<'list' | 'wizard' | 'detail'>('list');
+  const [visualizationMode, setVisualizationMode] = useState<'timeline' | 'kanban' | 'calendar' | 'assets'>('timeline');
+  const [activeProject, setActiveProject] = useState<ExistingProject | null>(null);
+  const [activeProjectEvents, setActiveProjectEvents] = useState<CalendarEvent[]>([]);
 
   // --- Wizard State ---
   const [step, setStep] = useState(1);
@@ -56,7 +88,11 @@ const SmartCalendarTool: React.FC<SmartCalendarToolProps> = ({ onBack }) => {
   const [endDate, setEndDate] = useState('');
   
   // Team State
-  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([
+      { id: '1', name: 'Jane Doe', role: 'Lead Designer', email: 'jane@metricis.com', color: 'bg-blue-500' },
+      { id: '2', name: 'Alex Lee', role: 'Junior Designer', email: 'alex@metricis.com', color: 'bg-green-500' },
+      { id: '3', name: 'Mike Smith', role: 'Copywriter', email: 'mike@metricis.com', color: 'bg-purple-500' },
+  ]);
   const [newMemberName, setNewMemberName] = useState('');
   const [newMemberRole, setNewMemberRole] = useState('');
   const [newMemberEmail, setNewMemberEmail] = useState('');
@@ -72,6 +108,7 @@ const SmartCalendarTool: React.FC<SmartCalendarToolProps> = ({ onBack }) => {
   // --- System State ---
   const [isLoading, setIsLoading] = useState(false);
   const [generatedPlan, setGeneratedPlan] = useState<CalendarEvent[] | null>(null);
+  const [generatedAssets, setGeneratedAssets] = useState<GeneratedAsset[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   // --- Helpers ---
@@ -103,6 +140,15 @@ const SmartCalendarTool: React.FC<SmartCalendarToolProps> = ({ onBack }) => {
 
   const nextStep = () => setStep(prev => Math.min(prev + 1, totalSteps));
   const prevStep = () => setStep(prev => Math.max(prev - 1, 1));
+
+  const handleOpenProject = (project: ExistingProject) => {
+      setActiveProject(project);
+      // Load mock events for this project
+      const events = MOCK_PROJECT_EVENTS[project.id] || [];
+      setActiveProjectEvents([...events]); // Clone to allow mutation
+      setView('detail');
+      setVisualizationMode('timeline'); // Default view
+  };
 
   const generateGoogleCalendarLink = (event: CalendarEvent) => {
     try {
@@ -170,9 +216,35 @@ const SmartCalendarTool: React.FC<SmartCalendarToolProps> = ({ onBack }) => {
 
       const text = response.text;
       if (text) {
-        const data = JSON.parse(text) as CalendarEvent[];
-        data.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-        setGeneratedPlan(data);
+        const data = JSON.parse(text) as Omit<CalendarEvent, 'id' | 'status'>[];
+        // Add ID and default status
+        const fullEvents: CalendarEvent[] = data.map((e, i) => ({
+            ...e,
+            id: `gen-${Date.now()}-${i}`,
+            status: 'todo'
+        }));
+
+        fullEvents.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        setGeneratedPlan(fullEvents);
+
+        // --- NEW: Generate Assets based on parameters ---
+        const assetsCount = parseInt(fileQuantity) || 10;
+        const formats = fileTypes.length > 0 ? fileTypes : ['PNG'];
+        const newAssets: GeneratedAsset[] = [];
+        
+        for (let i = 0; i < assetsCount; i++) {
+            const format = formats[i % formats.length];
+            const cleanName = projectName.replace(/[^a-zA-Z0-9]/g, '_') || 'Project';
+            newAssets.push({
+                id: `asset-${i}`,
+                name: `${cleanName}_Asset_${i + 1}.${format.toLowerCase()}`,
+                type: format,
+                size: `${(Math.random() * 5 + 0.5).toFixed(1)} MB`,
+                status: 'Ready'
+            });
+        }
+        setGeneratedAssets(newAssets);
+
         nextStep(); // Go to results step
       }
     } catch (err) {
@@ -200,11 +272,11 @@ const SmartCalendarTool: React.FC<SmartCalendarToolProps> = ({ onBack }) => {
     </div>
   );
 
-  // --- Visualization Components ---
+  // --- Visualization Components (Reusable) ---
 
-  const renderTimelineView = () => (
+  const renderTimelineView = (events: CalendarEvent[]) => (
       <div className="space-y-6">
-        {generatedPlan?.map((event, index) => {
+        {events.map((event, index) => {
             const assignee = teamMembers.find(m => m.name === event.assignedTo);
             const initials = getInitials(event.assignedTo || '');
             const color = assignee?.color || 'bg-gray-400';
@@ -233,10 +305,12 @@ const SmartCalendarTool: React.FC<SmartCalendarToolProps> = ({ onBack }) => {
                                     <span className="text-xs font-medium text-gray-600 pr-1">{event.assignedTo || 'Unassigned'}</span>
                                 </div>
 
-                                {/* Status Badge (Mock) */}
-                                <div className="flex items-center text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded-md">
-                                    <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
-                                    Invite Sent
+                                {/* Status Badge */}
+                                <div className={`flex items-center text-xs font-bold px-2 py-1 rounded-md ${
+                                    event.status === 'done' ? 'text-green-600 bg-green-50' : 
+                                    event.status === 'in-progress' ? 'text-blue-600 bg-blue-50' : 'text-gray-500 bg-gray-100'
+                                }`}>
+                                    {event.status === 'done' ? 'Completed' : event.status === 'in-progress' ? 'In Progress' : 'To Do'}
                                 </div>
                                 
                                 {/* Add to Calendar Button */}
@@ -258,29 +332,60 @@ const SmartCalendarTool: React.FC<SmartCalendarToolProps> = ({ onBack }) => {
       </div>
   );
 
-  const renderKanbanView = () => {
-    // Distribute for demo purposes
-    const total = generatedPlan?.length || 0;
-    const doneCount = Math.floor(total * 0.2); // First 20%
-    const inProgressCount = Math.floor(total * 0.2); // Next 20%
-    
-    const finished = generatedPlan?.slice(0, doneCount) || [];
-    const onIt = generatedPlan?.slice(doneCount, doneCount + inProgressCount) || [];
-    const toDo = generatedPlan?.slice(doneCount + inProgressCount) || [];
+  // --- Kanban Logic ---
+  const handleDragStart = (e: React.DragEvent, id: string) => {
+    e.dataTransfer.setData('eventId', id);
+    e.dataTransfer.effectAllowed = 'move';
+  };
 
-    const KanbanColumn = ({ title, events, color }: { title: string, events: CalendarEvent[], color: string }) => (
-        <div className="flex-1 bg-gray-50 rounded-xl p-4 min-h-[400px]">
+  const handleDragOver = (e: React.DragEvent) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDrop = (e: React.DragEvent, status: 'todo' | 'in-progress' | 'done') => {
+      e.preventDefault();
+      const id = e.dataTransfer.getData('eventId');
+      
+      const updateList = (list: CalendarEvent[]) => {
+          return list.map(item => item.id === id ? { ...item, status } : item);
+      };
+
+      if (view === 'detail') {
+          setActiveProjectEvents(prev => updateList(prev));
+      } else {
+          setGeneratedPlan(prev => prev ? updateList(prev) : null);
+      }
+  };
+
+  const renderKanbanView = (events: CalendarEvent[]) => {
+    // Filter by status
+    const toDo = events.filter(e => e.status === 'todo');
+    const onIt = events.filter(e => e.status === 'in-progress');
+    const finished = events.filter(e => e.status === 'done');
+
+    const KanbanColumn = ({ title, events, color, statusId }: { title: string, events: CalendarEvent[], color: string, statusId: 'todo' | 'in-progress' | 'done' }) => (
+        <div 
+            className="flex-1 bg-gray-50 rounded-xl p-4 min-h-[400px] border border-transparent hover:border-gray-200 transition-colors"
+            onDragOver={handleDragOver}
+            onDrop={(e) => handleDrop(e, statusId)}
+        >
             <div className={`flex items-center mb-4 pb-2 border-b border-gray-200`}>
                 <div className={`w-3 h-3 rounded-full ${color} mr-2`}></div>
                 <h4 className="font-bold text-secondary uppercase tracking-wider text-xs">{title} ({events.length})</h4>
             </div>
-            <div className="space-y-3">
-                {events.map((event, i) => {
+            <div className="space-y-3 min-h-[200px]">
+                {events.map((event) => {
                      const assignee = teamMembers.find(m => m.name === event.assignedTo);
                      const initials = getInitials(event.assignedTo || '');
                      const avatarColor = assignee?.color || 'bg-gray-400';
                     return (
-                        <div key={i} className="bg-white p-3 rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition-all cursor-pointer">
+                        <div 
+                            key={event.id} 
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, event.id)}
+                            className="bg-white p-3 rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition-all cursor-grab active:cursor-grabbing hover:border-primary/50"
+                        >
                             <span className="text-[10px] font-bold text-gray-400 mb-1 block">{event.date}</span>
                             <h5 className="font-bold text-secondary text-sm mb-2 leading-tight">{event.title}</h5>
                             <div className="flex justify-between items-center">
@@ -292,25 +397,32 @@ const SmartCalendarTool: React.FC<SmartCalendarToolProps> = ({ onBack }) => {
                         </div>
                     )
                 })}
+                 {events.length === 0 && (
+                    <div className="h-full border-2 border-dashed border-gray-200 rounded-lg flex items-center justify-center p-4 text-xs text-gray-400">
+                        Drop items here
+                    </div>
+                )}
             </div>
         </div>
     );
 
     return (
         <div className="flex flex-col md:flex-row gap-4 h-full">
-            <KanbanColumn title="To Do" events={toDo} color="bg-gray-400" />
-            <KanbanColumn title="On It" events={onIt} color="bg-primary" />
-            <KanbanColumn title="Finished" events={finished} color="bg-green-500" />
+            <KanbanColumn title="To Do" events={toDo} color="bg-gray-400" statusId="todo" />
+            <KanbanColumn title="On It" events={onIt} color="bg-primary" statusId="in-progress" />
+            <KanbanColumn title="Finished" events={finished} color="bg-green-500" statusId="done" />
         </div>
     );
   };
 
-  const renderCalendarView = () => {
-      // Simple month view based on start date
-      const start = startDate ? new Date(startDate) : new Date();
-      // Safety check if date is invalid
+  const renderCalendarView = (events: CalendarEvent[]) => {
+      // Logic to find the start month based on first event
+      const sortedEvents = [...events].sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      const firstEventDate = sortedEvents.length > 0 ? sortedEvents[0].date : new Date().toISOString();
+
+      const start = new Date(firstEventDate);
       if (isNaN(start.getTime())) {
-          return <div className="text-center p-10 text-gray-500">Please select a valid start date to view the calendar.</div>
+          return <div className="text-center p-10 text-gray-500">No valid dates to display.</div>
       }
 
       const monthName = start.toLocaleString('default', { month: 'long', year: 'numeric' });
@@ -322,8 +434,10 @@ const SmartCalendarTool: React.FC<SmartCalendarToolProps> = ({ onBack }) => {
 
       return (
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-              <div className="bg-gray-50 p-4 border-b border-gray-200 text-center">
+              <div className="bg-gray-50 p-4 border-b border-gray-200 text-center flex justify-between items-center">
+                  <button className="p-1 hover:bg-gray-200 rounded text-gray-500">&lt;</button>
                   <h3 className="font-bold text-lg text-secondary">{monthName}</h3>
+                  <button className="p-1 hover:bg-gray-200 rounded text-gray-500">&gt;</button>
               </div>
               <div className="grid grid-cols-7 text-center bg-gray-100 border-b border-gray-200">
                   {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (
@@ -334,13 +448,13 @@ const SmartCalendarTool: React.FC<SmartCalendarToolProps> = ({ onBack }) => {
                   {blanks.map(b => <div key={`blank-${b}`} className="bg-white h-32"></div>)}
                   {days.map(d => {
                       const dateStr = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-                      const daysEvents = generatedPlan?.filter(e => e.date === dateStr);
+                      const daysEvents = events.filter(e => e.date === dateStr);
                       
                       return (
                           <div key={d} className="bg-white h-32 p-1 relative group hover:bg-blue-50 transition-colors">
-                              <span className={`text-xs font-bold p-1 ${daysEvents?.length ? 'text-secondary' : 'text-gray-400'}`}>{d}</span>
+                              <span className={`text-xs font-bold p-1 ${daysEvents.length ? 'text-secondary' : 'text-gray-400'}`}>{d}</span>
                               <div className="mt-1 space-y-1 overflow-y-auto max-h-[90px]">
-                                  {daysEvents?.map((e, i) => (
+                                  {daysEvents.map((e, i) => (
                                       <div key={i} className="text-[9px] bg-primary/10 text-primary p-1 rounded border border-primary/20 truncate" title={e.title}>
                                           {e.title}
                                       </div>
@@ -353,6 +467,42 @@ const SmartCalendarTool: React.FC<SmartCalendarToolProps> = ({ onBack }) => {
           </div>
       );
   };
+
+  const renderAssetsView = () => (
+    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 animate-fade-in-up">
+        {generatedAssets.map((asset) => {
+            let bg = 'bg-gray-500';
+            if (['JPG', 'PNG', 'SVG'].includes(asset.type)) bg = 'bg-purple-500';
+            if (['PDF', 'INDD'].includes(asset.type)) bg = 'bg-red-500';
+            if (['AI', 'PSD'].includes(asset.type)) bg = 'bg-blue-500';
+
+            return (
+                <div key={asset.id} className="bg-white border border-gray-200 rounded-xl p-4 hover:shadow-lg transition-all group flex flex-col justify-between">
+                    <div>
+                        <div className="flex justify-between items-start mb-2">
+                             <span className={`text-[10px] font-bold text-white px-2 py-0.5 rounded ${bg}`}>
+                                {asset.type}
+                             </span>
+                             <span className="text-[10px] text-gray-400">{asset.size}</span>
+                        </div>
+                        <h4 className="font-bold text-secondary text-sm break-words mb-4 line-clamp-2" title={asset.name}>
+                            {asset.name}
+                        </h4>
+                    </div>
+                    <button className="w-full py-2 border border-secondary text-secondary rounded text-xs font-bold hover:bg-secondary hover:text-white transition-colors flex items-center justify-center">
+                        <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                        Download
+                    </button>
+                </div>
+            )
+        })}
+        {generatedAssets.length > 0 && (
+             <div className="border-2 border-dashed border-gray-200 rounded-xl flex flex-col items-center justify-center p-4 text-gray-400 bg-gray-50 hover:bg-white hover:border-primary hover:text-primary transition-all cursor-pointer">
+                 <span className="font-bold text-sm">Download All (.ZIP)</span>
+             </div>
+        )}
+    </div>
+  );
 
   // --------------------------------------------------------------------------
   // VIEW: LIST (Dashboard)
@@ -377,7 +527,11 @@ const SmartCalendarTool: React.FC<SmartCalendarToolProps> = ({ onBack }) => {
             {/* Grid of Projects */}
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {MOCK_PROJECTS.map(project => (
-                    <div key={project.id} className="bg-surface rounded-2xl p-6 border border-gray-200 hover:shadow-lg transition-all cursor-pointer group hover:-translate-y-1">
+                    <div 
+                        key={project.id} 
+                        onClick={() => handleOpenProject(project)}
+                        className="bg-surface rounded-2xl p-6 border border-gray-200 hover:shadow-lg transition-all cursor-pointer group hover:-translate-y-1"
+                    >
                         <div className="flex justify-between items-start mb-4">
                             <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
                                 project.status === 'Completed' ? 'bg-green-100 text-green-700' : 
@@ -401,6 +555,10 @@ const SmartCalendarTool: React.FC<SmartCalendarToolProps> = ({ onBack }) => {
                             <div className="bg-primary h-2 rounded-full" style={{ width: `${project.progress}%` }}></div>
                         </div>
                         <div className="text-right text-xs text-gray-400 font-bold">{project.progress}% Complete</div>
+                        
+                        <div className="mt-4 pt-4 border-t border-gray-100 text-center">
+                            <span className="text-sm font-bold text-primary opacity-0 group-hover:opacity-100 transition-opacity">View Details &rarr;</span>
+                        </div>
                     </div>
                 ))}
 
@@ -414,6 +572,55 @@ const SmartCalendarTool: React.FC<SmartCalendarToolProps> = ({ onBack }) => {
                     </div>
                     <span className="font-bold">Create New Project</span>
                 </div>
+            </div>
+        </div>
+      );
+  }
+
+  // --------------------------------------------------------------------------
+  // VIEW: DETAIL (Active Project)
+  // --------------------------------------------------------------------------
+  if (view === 'detail' && activeProject) {
+      return (
+        <div className="bg-white rounded-3xl shadow-xl border border-gray-100 min-h-[800px] flex flex-col p-8 relative overflow-hidden animate-fade-in-up">
+            <div className="flex justify-between items-center mb-6 pb-6 border-b border-gray-100">
+                <div>
+                    <button onClick={() => setView('list')} className="text-xs font-bold text-gray-400 hover:text-secondary mb-1">← BACK TO PROJECTS</button>
+                    <h2 className="text-3xl font-bold text-secondary font-serif">{activeProject.title}</h2>
+                    <p className="text-gray-500">{activeProject.dateRange}</p>
+                </div>
+                
+                <div className="flex items-center space-x-4">
+                     {/* View Switcher */}
+                    <div className="bg-gray-100 p-1 rounded-xl flex space-x-1">
+                        <button 
+                            onClick={() => setVisualizationMode('timeline')}
+                            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${visualizationMode === 'timeline' ? 'bg-white shadow-sm text-secondary' : 'text-gray-500 hover:text-secondary'}`}
+                        >
+                            Timeline
+                        </button>
+                        <button 
+                            onClick={() => setVisualizationMode('kanban')}
+                            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${visualizationMode === 'kanban' ? 'bg-white shadow-sm text-secondary' : 'text-gray-500 hover:text-secondary'}`}
+                        >
+                            Kanban
+                        </button>
+                        <button 
+                            onClick={() => setVisualizationMode('calendar')}
+                            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${visualizationMode === 'calendar' ? 'bg-white shadow-sm text-secondary' : 'text-gray-500 hover:text-secondary'}`}
+                        >
+                            Calendar
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+             {/* Visualization Area */}
+            <div className="flex-grow overflow-y-auto">
+                {visualizationMode === 'timeline' && renderTimelineView(activeProjectEvents)}
+                {visualizationMode === 'kanban' && renderKanbanView(activeProjectEvents)}
+                {visualizationMode === 'calendar' && renderCalendarView(activeProjectEvents)}
+                {/* Note: Detail view doesn't have generated assets stored in mock data for this demo, but could be added */}
             </div>
         </div>
       );
@@ -595,30 +802,37 @@ const SmartCalendarTool: React.FC<SmartCalendarToolProps> = ({ onBack }) => {
                             <div className="bg-gray-100 p-1 rounded-xl flex space-x-1">
                                 <button 
                                     onClick={() => setVisualizationMode('timeline')}
-                                    className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${visualizationMode === 'timeline' ? 'bg-white shadow-sm text-secondary' : 'text-gray-500 hover:text-secondary'}`}
+                                    className={`px-4 lg:px-6 py-2 rounded-lg text-sm font-bold transition-all ${visualizationMode === 'timeline' ? 'bg-white shadow-sm text-secondary' : 'text-gray-500 hover:text-secondary'}`}
                                 >
                                     Timeline
                                 </button>
                                 <button 
                                     onClick={() => setVisualizationMode('kanban')}
-                                    className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${visualizationMode === 'kanban' ? 'bg-white shadow-sm text-secondary' : 'text-gray-500 hover:text-secondary'}`}
+                                    className={`px-4 lg:px-6 py-2 rounded-lg text-sm font-bold transition-all ${visualizationMode === 'kanban' ? 'bg-white shadow-sm text-secondary' : 'text-gray-500 hover:text-secondary'}`}
                                 >
                                     Kanban
                                 </button>
                                 <button 
                                     onClick={() => setVisualizationMode('calendar')}
-                                    className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${visualizationMode === 'calendar' ? 'bg-white shadow-sm text-secondary' : 'text-gray-500 hover:text-secondary'}`}
+                                    className={`px-4 lg:px-6 py-2 rounded-lg text-sm font-bold transition-all ${visualizationMode === 'calendar' ? 'bg-white shadow-sm text-secondary' : 'text-gray-500 hover:text-secondary'}`}
                                 >
                                     Calendar
+                                </button>
+                                <button 
+                                    onClick={() => setVisualizationMode('assets')}
+                                    className={`px-4 lg:px-6 py-2 rounded-lg text-sm font-bold transition-all ${visualizationMode === 'assets' ? 'bg-white shadow-sm text-secondary' : 'text-gray-500 hover:text-secondary'}`}
+                                >
+                                    Files & Assets
                                 </button>
                             </div>
                         </div>
 
                         {/* Content Area */}
                         <div className="flex-grow overflow-y-auto pr-2">
-                            {visualizationMode === 'timeline' && renderTimelineView()}
-                            {visualizationMode === 'kanban' && renderKanbanView()}
-                            {visualizationMode === 'calendar' && renderCalendarView()}
+                            {visualizationMode === 'timeline' && renderTimelineView(generatedPlan)}
+                            {visualizationMode === 'kanban' && renderKanbanView(generatedPlan)}
+                            {visualizationMode === 'calendar' && renderCalendarView(generatedPlan)}
+                            {visualizationMode === 'assets' && renderAssetsView()}
                         </div>
                     </div>
                 ) : (

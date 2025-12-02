@@ -17,7 +17,10 @@ const Dashboard: React.FC<DashboardProps> = ({ userEmail, onLogout, onNavigate }
         {/* Welcome Section */}
         <div className="flex flex-col md:flex-row items-center mb-12 border-b border-gray-200 pb-8">
             <div className="relative mr-8 mb-6 md:mb-0 flex-shrink-0">
-                 <div className="w-24 h-24 rounded-full border-4 border-white shadow-xl overflow-hidden relative z-10 group cursor-pointer">
+                 <div 
+                    onClick={() => onNavigate('profile')}
+                    className="w-24 h-24 rounded-full border-4 border-white shadow-xl overflow-hidden relative z-10 group cursor-pointer"
+                 >
                     <img 
                         src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-1.2.1&auto=format&fit=crop&w=256&q=80" 
                         alt="User Profile" 

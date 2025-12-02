@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { GoogleGenAI, Type } from "@google/genai";
 import { CodeIcon, ShieldIcon } from './icons/Icons';
 
@@ -29,7 +29,8 @@ interface ParametricConfig {
   secondaryFont: string;
 
   // 4. Branding
-  primaryColor: string; // Hex
+  primaryColor: string; // Hex for preview
+  cmykValues?: { c: number, m: number, y: number, k: number }; // Optional CMYK storage
   logoPlacement: 'Top-Right' | 'Center' | 'Bottom-Right' | 'Corner';
 
   // 5. Export
@@ -42,8 +43,24 @@ const DEFAULT_CONFIG: ParametricConfig = {
   width: 210, height: 297, unit: 'mm', orientation: 'Portrait', bleed: 3, margin: 15,
   outputMethod: 'Digital', dpi: 300, colorMode: 'CMYK', substrate: 'Matte Paper',
   columns: 3, gutter: 5, primaryFont: 'Inter', secondaryFont: 'EB Garamond',
-  primaryColor: '#0090DA', logoPlacement: 'Bottom-Right',
+  primaryColor: '#0090DA', 
+  cmykValues: { c: 100, m: 35, y: 0, k: 0 },
+  logoPlacement: 'Bottom-Right',
   fileFormat: 'PDF/X-4', includeMarks: true
+};
+
+// Helper: Convert CMYK to Hex for preview
+const cmykToHex = (c: number, m: number, y: number, k: number) => {
+  const r = 255 * (1 - c / 100) * (1 - k / 100);
+  const g = 255 * (1 - m / 100) * (1 - k / 100);
+  const b = 255 * (1 - y / 100) * (1 - k / 100);
+  
+  const toHex = (n: number) => {
+    const hex = Math.round(n).toString(16);
+    return hex.length === 1 ? '0' + hex : hex;
+  };
+  
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
 };
 
 // Moved components outside to prevent re-creation on render
@@ -81,6 +98,9 @@ const ParametricTemplateTool: React.FC<ParametricTemplateToolProps> = ({ onBack 
   const [config, setConfig] = useState<ParametricConfig>(DEFAULT_CONFIG);
   const [activeTab, setActiveTab] = useState<'layout' | 'print' | 'grid' | 'brand' | 'export'>('layout');
   const [aiMessage, setAiMessage] = useState<string | null>(null);
+
+  // Local state for Color Picker tabs
+  const [colorInputMode, setColorInputMode] = useState<'RGB' | 'CMYK'>('RGB');
 
   // --- AI Auto-Configuration ---
   const handleAutoConfigure = async () => {
@@ -149,6 +169,16 @@ const ParametricTemplateTool: React.FC<ParametricTemplateToolProps> = ({ onBack 
   // Typed update function using Generics for type safety
   const update = <K extends keyof ParametricConfig>(key: K, value: ParametricConfig[K]) => {
     setConfig(prev => ({ ...prev, [key]: value }));
+  };
+
+  const handleCMYKChange = (key: 'c'|'m'|'y'|'k', val: number) => {
+    const newCMYK = { ...config.cmykValues!, [key]: val };
+    const hex = cmykToHex(newCMYK.c, newCMYK.m, newCMYK.y, newCMYK.k);
+    setConfig(prev => ({
+        ...prev,
+        cmykValues: newCMYK,
+        primaryColor: hex
+    }));
   };
 
   return (
@@ -322,11 +352,75 @@ const ParametricTemplateTool: React.FC<ParametricTemplateToolProps> = ({ onBack 
                 )}
 
                 {activeTab === 'brand' && (
-                    <div className="grid grid-cols-2 gap-6 animate-fade-in-up">
+                    <div className="grid grid-cols-1 gap-6 animate-fade-in-up">
                         <InputGroup label="Primary Color">
-                            <div className="flex items-center space-x-2">
-                                <input type="color" value={config.primaryColor} onChange={(e) => update('primaryColor', e.target.value)} className="w-12 h-12 p-1 rounded border border-gray-300 cursor-pointer" />
-                                <input type="text" value={config.primaryColor} onChange={(e) => update('primaryColor', e.target.value)} className="flex-grow p-3 rounded border border-gray-300 font-mono" />
+                            <div className="bg-white p-4 rounded-xl border border-gray-200">
+                                {/* Color Mode Tabs */}
+                                <div className="flex space-x-2 mb-4 border-b border-gray-100 pb-2">
+                                    <button 
+                                        onClick={() => setColorInputMode('RGB')}
+                                        className={`px-3 py-1 text-xs font-bold rounded ${colorInputMode === 'RGB' ? 'bg-primary text-white' : 'text-gray-400 hover:text-secondary'}`}
+                                    >
+                                        RGB Disc
+                                    </button>
+                                    <button 
+                                        onClick={() => setColorInputMode('CMYK')}
+                                        className={`px-3 py-1 text-xs font-bold rounded ${colorInputMode === 'CMYK' ? 'bg-primary text-white' : 'text-gray-400 hover:text-secondary'}`}
+                                    >
+                                        CMYK Sliders
+                                    </button>
+                                </div>
+
+                                {colorInputMode === 'RGB' ? (
+                                    <div className="flex flex-col md:flex-row items-center gap-4">
+                                         {/* Native HTML5 Color Input acts as a Color Disc on most OS */}
+                                        <div className="relative w-20 h-20 rounded-full overflow-hidden shadow-inner border-4 border-gray-100 flex-shrink-0 cursor-pointer hover:border-primary transition-colors">
+                                            <input 
+                                                type="color" 
+                                                value={config.primaryColor} 
+                                                onChange={(e) => update('primaryColor', e.target.value)} 
+                                                className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[150%] h-[150%] p-0 m-0 border-0 cursor-pointer" 
+                                            />
+                                        </div>
+                                        <div className="flex-grow w-full">
+                                             <label className="text-xs text-gray-400 mb-1 block">Hex Code</label>
+                                             <input 
+                                                type="text" 
+                                                value={config.primaryColor} 
+                                                onChange={(e) => update('primaryColor', e.target.value)} 
+                                                className="w-full p-3 rounded border border-gray-300 font-mono text-sm uppercase" 
+                                             />
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-3">
+                                        {(['c', 'm', 'y', 'k'] as const).map(k => (
+                                            <div key={k} className="flex items-center space-x-3">
+                                                <span className="text-xs font-bold w-4 uppercase">{k}</span>
+                                                <input 
+                                                    type="range" min="0" max="100" 
+                                                    value={config.cmykValues?.[k] || 0} 
+                                                    onChange={(e) => handleCMYKChange(k, Number(e.target.value))}
+                                                    className={`flex-grow h-1 rounded-lg appearance-none cursor-pointer ${
+                                                        k === 'c' ? 'bg-cyan-200 accent-cyan-500' :
+                                                        k === 'm' ? 'bg-pink-200 accent-pink-500' :
+                                                        k === 'y' ? 'bg-yellow-100 accent-yellow-400' :
+                                                        'bg-gray-200 accent-black'
+                                                    }`}
+                                                />
+                                                <input 
+                                                    type="number" min="0" max="100" 
+                                                    value={config.cmykValues?.[k] || 0}
+                                                    onChange={(e) => handleCMYKChange(k, Number(e.target.value))}
+                                                    className="w-12 p-1 text-xs border border-gray-300 rounded text-center"
+                                                />
+                                            </div>
+                                        ))}
+                                        <div className="mt-2 text-xs text-gray-400 text-center">
+                                            Preview Hex: <span className="font-mono">{config.primaryColor}</span>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </InputGroup>
                         <InputGroup label="Logo Placement">

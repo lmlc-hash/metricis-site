@@ -81,6 +81,22 @@ const USER_FOLDERS = [
     { id: 103, name: 'Personal Portfolio', items: 4, date: '3 weeks ago', color: 'bg-accent-yellow' },
 ];
 
+// Mock Data for Files inside folders
+const FOLDER_CONTENTS: Record<number, Array<{ id: number, name: string, type: string, preview: string, date: string }>> = {
+    101: [
+        { id: 1, name: 'Campaign_Main_Banner', type: 'JPG', preview: 'https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=400&q=80', date: 'Oct 2, 2023' },
+        { id: 2, name: 'Story_Template_01', type: 'PNG', preview: 'https://images.unsplash.com/photo-1611162616475-46b635cb6868?auto=format&fit=crop&w=400&q=80', date: 'Oct 2, 2023' },
+        { id: 3, name: 'Social_Carousel_Grid', type: 'PSD', preview: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=400&q=80', date: 'Oct 1, 2023' },
+    ],
+    102: [
+        { id: 4, name: 'Logo_Pack_Final', type: 'AI', preview: 'https://images.unsplash.com/photo-1626785774573-4b799314346d?auto=format&fit=crop&w=400&q=80', date: 'Sep 25, 2023' },
+        { id: 5, name: 'Brand_Guidelines_v2', type: 'PDF', preview: 'https://images.unsplash.com/photo-1586281380349-632531db7ed4?auto=format&fit=crop&w=400&q=80', date: 'Sep 24, 2023' },
+    ],
+    103: [
+        { id: 6, name: 'Resume_2024', type: 'PDF', preview: 'https://images.unsplash.com/photo-1586281380349-632531db7ed4?auto=format&fit=crop&w=400&q=80', date: 'Sep 10, 2023' },
+    ]
+};
+
 const FolderIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10" fill="currentColor" viewBox="0 0 24 24">
         <path d="M20 6h-8l-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-2.06 11L15 10h2v7h.94z" opacity=".3"/>
@@ -88,8 +104,24 @@ const FolderIcon = () => (
     </svg>
 );
 
+const FileIcon = ({ type }: { type: string }) => {
+    let color = 'bg-gray-500';
+    if (['JPG', 'PNG'].includes(type)) color = 'bg-purple-500';
+    if (['PDF'].includes(type)) color = 'bg-red-500';
+    if (['AI', 'PSD'].includes(type)) color = 'bg-blue-500';
+
+    return (
+        <div className={`px-2 py-1 rounded text-[10px] font-bold text-white ${color}`}>
+            {type}
+        </div>
+    );
+};
+
 const TemplateGallery: React.FC<TemplateGalleryProps> = ({ showPersonal = false }) => {
-    // State for all filters
+    // State for navigation within Personal Library
+    const [selectedFolderId, setSelectedFolderId] = useState<number | null>(null);
+
+    // State for all filters (Public Gallery)
     const [projectType, setProjectType] = useState('All');
     const [fileType, setFileType] = useState('All');
     const [palette, setPalette] = useState('All');
@@ -136,6 +168,9 @@ const TemplateGallery: React.FC<TemplateGalleryProps> = ({ showPersonal = false 
         </div>
     );
 
+    const activeFolder = selectedFolderId ? USER_FOLDERS.find(f => f.id === selectedFolderId) : null;
+    const folderFiles = selectedFolderId ? FOLDER_CONTENTS[selectedFolderId] || [] : [];
+
     return (
         <section id="gallery" className="py-24 bg-white border-t border-gray-100">
             <div className="container mx-auto px-6">
@@ -143,34 +178,96 @@ const TemplateGallery: React.FC<TemplateGalleryProps> = ({ showPersonal = false 
                 {/* --- SECTION 1: MY COLLECTIONS (FOLDERS) - Authenticated Only --- */}
                 {showPersonal && (
                     <div className="mb-20">
-                        <div className="flex justify-between items-end mb-8">
-                            <div>
-                                <h2 className="text-4xl font-bold text-secondary font-serif">My Collections</h2>
-                                <p className="text-gray-600 mt-2">Access your generated templates and saved projects.</p>
+                        {/* Header Area */}
+                        {!activeFolder ? (
+                            <div className="flex justify-between items-end mb-8 animate-fade-in-up">
+                                <div>
+                                    <h2 className="text-4xl font-bold text-secondary font-serif">My Collections</h2>
+                                    <p className="text-gray-600 mt-2">Access your generated templates and saved projects.</p>
+                                </div>
+                                <button className="bg-white border-2 border-dashed border-gray-300 text-secondary px-5 py-2 rounded-xl font-bold hover:border-primary hover:text-primary transition-colors flex items-center">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                    </svg>
+                                    New Collection
+                                </button>
                             </div>
-                            <button className="bg-white border-2 border-dashed border-gray-300 text-secondary px-5 py-2 rounded-xl font-bold hover:border-primary hover:text-primary transition-colors flex items-center">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                                </svg>
-                                New Collection
-                            </button>
-                        </div>
-
-                        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-                            {USER_FOLDERS.map(folder => (
-                                <div key={folder.id} className="bg-surface rounded-xl p-6 border border-gray-100 hover:shadow-lg transition-all cursor-pointer group hover:-translate-y-1 relative overflow-hidden">
-                                    <div className={`absolute top-0 left-0 w-1.5 h-full ${folder.color}`}></div>
-                                    <div className="text-secondary/20 mb-4 group-hover:text-secondary/40 transition-colors">
-                                        <FolderIcon />
-                                    </div>
-                                    <h3 className="text-lg font-bold text-secondary mb-1 group-hover:text-primary transition-colors">{folder.name}</h3>
-                                    <div className="flex justify-between items-center text-xs text-gray-500 font-medium">
-                                        <span>{folder.items} Files</span>
-                                        <span>{folder.date}</span>
+                        ) : (
+                             <div className="flex justify-between items-center mb-8 animate-fade-in-up">
+                                <div className="flex items-center">
+                                    <button 
+                                        onClick={() => setSelectedFolderId(null)}
+                                        className="mr-4 p-2 rounded-full bg-gray-100 hover:bg-gray-200 text-secondary transition-colors"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                                        </svg>
+                                    </button>
+                                    <div>
+                                        <div className="flex items-center space-x-2">
+                                            <div className={`w-3 h-3 rounded-full ${activeFolder.color}`}></div>
+                                            <h2 className="text-3xl font-bold text-secondary font-serif">{activeFolder.name}</h2>
+                                        </div>
+                                        <p className="text-gray-500 text-sm mt-1 ml-5">Created {activeFolder.date} • {activeFolder.items} Items</p>
                                     </div>
                                 </div>
-                            ))}
-                        </div>
+                                <button className="text-primary font-bold hover:underline">Download All</button>
+                            </div>
+                        )}
+
+                        {/* Content Area */}
+                        {!activeFolder ? (
+                            // View: FOLDER LIST
+                            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 animate-fade-in-up">
+                                {USER_FOLDERS.map(folder => (
+                                    <div 
+                                        key={folder.id} 
+                                        onClick={() => setSelectedFolderId(folder.id)}
+                                        className="bg-surface rounded-xl p-6 border border-gray-100 hover:shadow-lg transition-all cursor-pointer group hover:-translate-y-1 relative overflow-hidden"
+                                    >
+                                        <div className={`absolute top-0 left-0 w-1.5 h-full ${folder.color}`}></div>
+                                        <div className="text-secondary/20 mb-4 group-hover:text-secondary/40 transition-colors">
+                                            <FolderIcon />
+                                        </div>
+                                        <h3 className="text-lg font-bold text-secondary mb-1 group-hover:text-primary transition-colors">{folder.name}</h3>
+                                        <div className="flex justify-between items-center text-xs text-gray-500 font-medium">
+                                            <span>{folder.items} Files</span>
+                                            <span>{folder.date}</span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            // View: FILE LIST (Inside Folder)
+                            <div className="grid md:grid-cols-3 lg:grid-cols-4 gap-6 animate-fade-in-up">
+                                {folderFiles.map(file => (
+                                    <div key={file.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-md transition-all group">
+                                        <div className="h-40 overflow-hidden relative bg-gray-100">
+                                            <img src={file.preview} alt={file.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                                            <div className="absolute top-2 right-2">
+                                                <FileIcon type={file.type} />
+                                            </div>
+                                        </div>
+                                        <div className="p-4">
+                                            <h4 className="font-bold text-secondary text-sm mb-1 truncate" title={file.name}>{file.name}</h4>
+                                            <p className="text-xs text-gray-500 mb-4">{file.date}</p>
+                                            <div className="flex space-x-2">
+                                                <button className="flex-1 py-1.5 border border-gray-300 rounded text-xs font-bold text-gray-600 hover:bg-gray-50 transition-colors">Edit</button>
+                                                <button className="flex-1 py-1.5 bg-secondary text-white rounded text-xs font-bold hover:bg-primary transition-colors">Download</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                                {/* Upload New File Card */}
+                                <div className="border-2 border-dashed border-gray-200 rounded-xl flex flex-col items-center justify-center p-6 text-gray-400 hover:text-primary hover:border-primary hover:bg-primary/5 transition-all cursor-pointer min-h-[200px]">
+                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                    </svg>
+                                    <span className="font-bold text-sm">Upload File</span>
+                                </div>
+                            </div>
+                        )}
+                        
                         <div className="w-full h-px bg-gray-100 mt-20"></div>
                     </div>
                 )}
