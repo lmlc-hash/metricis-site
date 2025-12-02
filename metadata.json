@@ -1,0 +1,5 @@
+{
+  "name": "Metricis Landing Page",
+  "description": "A modern and visually appealing landing page for a fictional SaaS product, built with React and Tailwind CSS. It features a hero section, feature highlights, testimonials, pricing, and a call-to-action.",
+  "requestFramePermissions": []
+}
